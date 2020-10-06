@@ -5,6 +5,8 @@ from pprint import pprint
 from toolz.curried import *
 from bidi.algorithm import get_display
 
+DEBUG = True
+
 load_dotenv()
 
 creds = {
@@ -23,9 +25,12 @@ SELF_REPLY = "15ra9m24jua4q"
 SELF_PARTICIPATION = "15ra7m8a91qzb"
 DUPLICATE_REPLY = "15rab3ega9l4j"
 
+THRESHHOLD = 3
+
 subreddit_name = "ouijew"
 subreddit = reddit.subreddit(subreddit_name)
 flair = lambda f: "ויג'ו אומר: " + f
+is_goodbye = lambda s: s[:7] == "להתראות"
 
 dop = do(compose_left(do(print), type, print))
 
@@ -38,14 +43,14 @@ def partition(pred, lst):
 
 def process_goodbye(reply):
     try:
-        parent = reply.parent
+        parent = reply.parent()
         return process_goodbye(parent) + parent.body
     except AttributeError:
         return ""
 
 
 def is_valid(reply):
-    return len(reply.body) <= 1 or reply.body[:7] == "להתראות"
+    return len(reply.body) <= 1 or is_goodbye(reply.body)
 
 
 def remove(reply, reason_id):
@@ -54,6 +59,8 @@ def remove(reply, reason_id):
             reason_id, reply.id, get_display(reply.body)
         )
     )
+    if not DEBUG:
+        reply.remove(reason_id=reason_id)
 
 
 @curry
@@ -81,39 +88,51 @@ def process_post(submission):
         )
     )
     submission.comments.replace_more(limit=None)
-    comment_queue = leave_only((is_valid, INVALID_REPLY))(
-        submission.comments[:]
+    comment_queue = pipe(
+        submission.comments[:],
+        filter(lambda r: r.banned_by is None and r.author),
+        leave_only((is_valid, INVALID_REPLY)),
     )
     goodbyes = []
     while comment_queue:
         comment = comment_queue.pop(0)
         replies = comment.replies
-        if comment.body[:7] == "להתראות":
+        if is_goodbye(comment.body):
             goodbyes.append(comment)
         else:
             pipe(
                 replies,
+                filter(lambda r: r.banned_by is None and r.author),
                 filter(is_valid),
                 leave_only((lambda r: comment.author != r.author, SELF_REPLY)),
                 leave_only(
                     (
-                        lambda r: submission.author != r.author,
+                        lambda r: submission.author != r.author
+                        or is_goodbye(r.body),
                         SELF_PARTICIPATION,
                     )
                 ),
                 remove_duplicates,
                 comment_queue.extend,
             )
-    if goodbyes:
-        winner = sorted(goodbyes, key=lambda reply: reply.score)[-1].replace("#", " ")
-        print(get_display(process_goodbye(winner)))
-        submission.mod.flair(text="ויג'ו אומר: " + winner)
-    else:
+    try:
+        winner = pipe(
+            goodbyes,
+            filter(lambda reply: reply.score >= THRESHHOLD),
+            partial(sorted, key=lambda reply: reply.score),
+            lambda gs: process_goodbye(gs[-1]),
+            lambda w: str.replace(w, "#", " "),
+        )
+        text = flair(winner)
+        print(get_display(text))
+        if not DEBUG:
+            submission.mod.flair(text=text)
+    except IndexError:
         print("no winner")
 
 
 def test_process_post():
-    process_post(do(print)(reddit.submission(id="iudtdm")))
+    process_post(do(print)(reddit.submission(id="iq18sm")))
 
 
 def print_removal_reason_ids():
@@ -127,13 +146,16 @@ def print_removal_reason_ids():
 
 
 def check_hot():
-    for submission in subreddit.hot(limit=50):
-        process_post(submission)
+    for submission in subreddit.hot(limit=100):
+        if not submission.stickied and not submission.link_flair_text:
+            process_post(submission)
 
 
 def main():
-    process_post(reddit.submission("it9ut3"))
+    # print(reddit.submission("it9ut3").link_flair_text)
+    # print(reddit.submission("j54e28").link_flair_text)
+    print(reddit.comment("g4o3sqr").author)
 
 
 if __name__ == "__main__":
-    main()
+    check_hot()
