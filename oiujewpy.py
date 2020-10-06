@@ -4,8 +4,9 @@ import praw
 from pprint import pprint
 from toolz.curried import *
 from bidi.algorithm import get_display
+import time
 
-DEBUG = True
+DEBUG = False
 
 load_dotenv()
 
@@ -25,7 +26,7 @@ SELF_REPLY = "15ra9m24jua4q"
 SELF_PARTICIPATION = "15ra7m8a91qzb"
 DUPLICATE_REPLY = "15rab3ega9l4j"
 
-THRESHHOLD = 3
+THRESHHOLD = 2
 
 subreddit_name = "ouijew"
 subreddit = reddit.subreddit(subreddit_name)
@@ -60,7 +61,7 @@ def remove(reply, reason_id):
         )
     )
     if not DEBUG:
-        reply.remove(reason_id=reason_id)
+        reply.mod.remove(reason_id=reason_id)
 
 
 @curry
@@ -132,7 +133,7 @@ def process_post(submission):
 
 
 def test_process_post():
-    process_post(do(print)(reddit.submission(id="iq18sm")))
+    process_post(do(print)(reddit.submission(id="ivsz3y")))
 
 
 def print_removal_reason_ids():
@@ -146,16 +147,27 @@ def print_removal_reason_ids():
 
 
 def check_hot():
-    for submission in subreddit.hot(limit=100):
-        if not submission.stickied and not submission.link_flair_text:
+    for submission in subreddit.hot(limit=50):
+        if not submission.stickied: # and not submission.link_flair_text:
             process_post(submission)
 
+def check_reports():
+    for submission in subreddit.mod.reports():
+        process_post(submission)
+        submission.mod.approve()
 
-def main():
+
+def test():
     # print(reddit.submission("it9ut3").link_flair_text)
     # print(reddit.submission("j54e28").link_flair_text)
     print(reddit.comment("g4o3sqr").author)
 
+def main():
+    while True:
+        print("\n\n\nHere we go again!")
+        check_hot()
+        time.sleep(120)
+
 
 if __name__ == "__main__":
-    check_hot()
+    main()
