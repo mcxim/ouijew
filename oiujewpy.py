@@ -148,8 +148,9 @@ def print_removal_reason_ids():
 
 def check_hot():
     for submission in subreddit.hot(limit=50):
-        if not submission.stickied: # and not submission.link_flair_text:
+        if not submission.stickied:  # and not submission.link_flair_text:
             process_post(submission)
+
 
 def check_reports():
     for submission in subreddit.mod.reports():
@@ -161,6 +162,7 @@ def test():
     # print(reddit.submission("it9ut3").link_flair_text)
     # print(reddit.submission("j54e28").link_flair_text)
     print(reddit.comment("g4o3sqr").author)
+
 
 def main():
     while True:
