@@ -1,12 +1,25 @@
 from dotenv import load_dotenv
 import os
 import praw
+import prawcore
 from pprint import pprint
 from toolz.curried import *
 from bidi.algorithm import get_display
 import time
+import functools
+
+
+def star(f):
+    @functools.wraps(f)
+    def f_inner(args):
+        return f(*args)
+
+    return f_inner
+
 
 DEBUG = False
+
+CHECK_HOT = 30  # Number of posts checked on each iteartion
 
 load_dotenv()
 
@@ -26,23 +39,29 @@ SELF_REPLY = "15ra9m24jua4q"
 SELF_PARTICIPATION = "15ra7m8a91qzb"
 DUPLICATE_REPLY = "15rab3ega9l4j"
 
-THRESHHOLD = 2
+THRESHHOLD = 2  # Minimum "goodbye" score to get into a flair
 
 subreddit_name = "ouijew"
 subreddit = reddit.subreddit(subreddit_name)
 flair = lambda f: "ויג'ו אומר: " + f
 is_goodbye = lambda s: s[:7] == "להתראות"
 
-dop = do(compose_left(do(print), type, print))
-
 
 def partition(pred, lst):
+    """
+    Takes a predicate and a list and returns the pair of lists of elements
+    which do and do not satisfy the predicate, respectively.
+    """
     true, false = [], []
     [(false, true)[pred(var)].append(var) for var in lst]
     return true, false
 
 
 def process_goodbye(reply):
+    """
+    Traverses the comment tree starting at a "goodbye" up until the root,
+    collecting the letters and returning ouija's answer.
+    """
     try:
         parent = reply.parent()
         return process_goodbye(parent) + parent.body
@@ -51,10 +70,16 @@ def process_goodbye(reply):
 
 
 def is_valid(reply):
+    """
+    Checks if reply's content is valid.
+    """
     return len(reply.body) <= 1 or is_goodbye(reply.body)
 
 
 def remove(reply, reason_id):
+    """
+    Removes a comment / reply as moderator, providing the given reason.
+    """
     print(
         "removing ({}) https://www.reddit.com/api/info?id=t1_{} : {}".format(
             reason_id, reply.id, get_display(reply.body)
@@ -66,6 +91,10 @@ def remove(reply, reason_id):
 
 @curry
 def leave_only(args, replies):
+    """
+    Filters out the comments / replies that fail the predicate, remove
+    the others as mod.
+    """
     predicate, message_id = args
     valid, invalid = partition(predicate, replies)
     [remove(reply, message_id) for reply in invalid]
@@ -73,16 +102,26 @@ def leave_only(args, replies):
 
 
 def remove_duplicates(replies):
-    left = []
-    for dups in groupby(lambda r: r.body)(replies).values():
-        by_time = sorted(dups, key=lambda r: r.created)
-        for reply in by_time[1:]:
-            remove(reply, DUPLICATE_REPLY)
-        left.append(by_time[0])
-    return left
+    """
+    Detect duplicate answers, leave only the originals, remove copycats.
+    """
+    return pipe(
+        replies,
+        groupby(lambda r: r.body),
+        dict.values,
+        map(
+            compose_left(
+                partial(sorted, key=lambda r: r.created),
+                lambda rs: ([remove(r) for r in rs[1:]], rs[0])[1],
+            )
+        ),
+    )
 
 
 def process_post(submission):
+    """
+    Process a submission, remove illegal replies and update flare if needed.
+    """
     print(
         "\nhttps://www.reddit.com/{}\n{}".format(
             submission.id, get_display(submission.title)
@@ -103,9 +142,13 @@ def process_post(submission):
         else:
             pipe(
                 replies,
-                filter(lambda r: r.banned_by is None and r.author),
-                filter(is_valid),
-                leave_only((lambda r: comment.author != r.author, SELF_REPLY)),
+                filter(
+                    lambda r: r.banned_by is None and r.author
+                ),  # Filter out removed replies.
+                filter(is_valid),  # Filter out invalid replies.
+                leave_only(
+                    (lambda r: comment.author != r.author, SELF_REPLY)
+                ),  # Filter out self replies, remove the rest.
                 leave_only(
                     (
                         lambda r: submission.author != r.author
@@ -147,7 +190,7 @@ def print_removal_reason_ids():
 
 
 def check_hot():
-    for submission in subreddit.hot(limit=50):
+    for submission in subreddit.hot(limit=CHECK_HOT):
         if not submission.stickied:  # and not submission.link_flair_text:
             process_post(submission)
 
@@ -158,17 +201,14 @@ def check_reports():
         submission.mod.approve()
 
 
-def test():
-    # print(reddit.submission("it9ut3").link_flair_text)
-    # print(reddit.submission("j54e28").link_flair_text)
-    print(reddit.comment("g4o3sqr").author)
-
-
 def main():
     while True:
         print("\n\n\nHere we go again!")
-        check_hot()
-        time.sleep(120)
+        try:
+            check_hot()
+            time.sleep(120)
+        except prawcore.exceptions.ServerError:
+            pass
 
 
 if __name__ == "__main__":
