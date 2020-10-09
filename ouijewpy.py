@@ -4,17 +4,9 @@ import praw
 import prawcore
 from pprint import pprint
 from toolz.curried import *
-from bidi.algorithm import get_display
+
 import time
 import functools
-
-
-def star(f):
-    @functools.wraps(f)
-    def f_inner(args):
-        return f(*args)
-
-    return f_inner
 
 
 DEBUG = False
@@ -22,6 +14,11 @@ DEBUG = False
 CHECK_HOT = 30  # Number of posts checked on each iteartion
 
 load_dotenv()
+
+if os.environ["flip_hebrew"].lower() in ["true", "yes", "1"]:
+    from bidi.algorithm import get_display
+else:
+    get_display = identity
 
 creds = {
     "client_id": os.environ["client_id"],
@@ -191,7 +188,7 @@ def print_removal_reason_ids():
 
 def check_hot():
     for submission in subreddit.hot(limit=CHECK_HOT):
-        if not submission.stickied:  # and not submission.link_flair_text:
+        if not submission.stickied:
             process_post(submission)
 
 
