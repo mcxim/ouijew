@@ -2,11 +2,8 @@ from dotenv import load_dotenv
 import os
 import praw
 import prawcore
-from pprint import pprint
-from toolz.curried import *
-
 import time
-import functools
+from toolz.curried import *
 
 
 DEBUG = False
@@ -15,7 +12,7 @@ CHECK_HOT = 30  # Number of posts checked on each iteartion
 
 load_dotenv()
 
-if os.environ["flip_hebrew"].lower() in ["true", "yes", "1"]:
+if os.environ["flip_hebrew"].lower() in {"true", "yes", "1"}:
     from bidi.algorithm import get_display
 else:
     get_display = identity
@@ -109,7 +106,10 @@ def remove_duplicates(replies):
         map(
             compose_left(
                 partial(sorted, key=lambda r: r.created),
-                lambda rs: ([remove(r) for r in rs[1:]], rs[0])[1],
+                lambda rs: (
+                    [remove(r, DUPLICATE_REPLY) for r in rs[1:]],
+                    rs[0],
+                )[1],
             )
         ),
     )
