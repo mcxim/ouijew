@@ -204,7 +204,7 @@ def main():
         try:
             check_hot()
             time.sleep(120)
-        except prawcore.exceptions.ServerError:
+        except (prawcore.exceptions.ServerError, prawcore.exceptions.RequestException):
             pass
 
 
