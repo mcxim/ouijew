@@ -5,9 +5,9 @@ import prawcore
 import time
 from toolz.curried import *
 
-
+SPACE = "רווח"
 DEBUG = False
-
+HEB_GOODBYE = "להתראות"
 CHECK_HOT = 30  # Number of posts checked on each iteartion
 
 load_dotenv()
@@ -38,9 +38,9 @@ THRESHHOLD = 2  # Minimum "goodbye" score to get into a flair
 subreddit_name = "ouijew"
 subreddit = reddit.subreddit(subreddit_name)
 flair = lambda f: "ויג'ו אומר: " + f
-is_goodbye = lambda s: s[:7] == "להתראות"
+is_goodbye = lambda s: s.find(HEB_GOODBYE) >= 0 # Determine if string contains goodbye
 
-
+   
 def partition(pred, lst):
     """
     Takes a predicate and a list and returns the pair of lists of elements
@@ -54,10 +54,13 @@ def partition(pred, lst):
 def process_goodbye(reply):
     """
     Traverses the comment tree starting at a "goodbye" up until the root,
-    collecting the letters and returning ouija's answer.
+    collecting the letters and returning ouija's answer recursively.
     """
     try:
         parent = reply.parent()
+        if parent.body == SPACE:
+            return process_goodbye(parent) + " "
+        
         return process_goodbye(parent) + parent.body
     except AttributeError:
         return ""
@@ -67,7 +70,7 @@ def is_valid(reply):
     """
     Checks if reply's content is valid.
     """
-    return len(reply.body) <= 1 or is_goodbye(reply.body)
+    return len(reply.body) <= 1 or is_goodbye(reply.body) or reply.body == SPACE
 
 
 def remove(reply, reason_id):
