@@ -7,7 +7,9 @@ from toolz.curried import *
 
 SPACE = "רווח"
 DEBUG = False
+FLAIR_NO_ANSWER = "טרם נענה"
 HEB_GOODBYE = "להתראות"
+
 CHECK_HOT = 30  # Number of posts checked on each iteartion
 
 load_dotenv()
@@ -173,6 +175,9 @@ def process_post(submission):
             submission.mod.flair(text=text)
     except IndexError:
         print("no winner")
+        text = FLAIR_NO_ANSWER
+        if not DEBUG:
+            submission.mod.flair(text=text)
 
 
 def test_process_post():
